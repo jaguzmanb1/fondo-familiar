@@ -27,9 +27,9 @@ func (h *Auth) Signup(w http.ResponseWriter, r *http.Request) {
 func (h *Auth) Signin(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(KeyUser{}).(*data.UserSignin)
 
-	h.l.Info("[Signin] Handling signin request for", "phone", user.Email)
+	h.l.Info("[Signin] Handling signin request for", "user", user.Usuario)
 
-	userdb, err := h.u.GetUserByEmail(user.Email)
+	userdb, err := h.u.GetUserByUser(user.Usuario)
 
 	switch err {
 	case nil:

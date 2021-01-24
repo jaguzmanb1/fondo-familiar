@@ -7,6 +7,7 @@ type Aporte struct {
 	Valor     int    `json:"valor" validate:"required"`
 	Fecha     string `json:"fecha" validate:"required"`
 	IDUsuario int    `json:"idUsuario" validate:"required"`
+	ID        int    `json:"id"`
 }
 
 // SumAportes describes the sum of various aportes
@@ -37,7 +38,7 @@ func (u *UserService) GetAllAportes() (Aportes, error) {
 	u.l.Info("[GetAllAportes] Getting all aportes from database")
 
 	aportes := Aportes{}
-	rows, err := u.DB.Query("SELECT * FROM aportes")
+	rows, err := u.DB.Query("SELECT valor, idUsuario, fecha FROM aportes")
 	if err != nil {
 		return aportes, err
 	}
@@ -65,13 +66,13 @@ func (u *UserService) GetAllAportesByID(id int, startDate string, endDate string
 	)
 
 	if startDate != "" && endDate != "" {
-		rows, err = u.DB.Query("SELECT * FROM aportes where idUsuario = ? AND fecha BETWEEN ? AND ? ", id, startDate, endDate)
+		rows, err = u.DB.Query("SELECT valor, idUsuario, fecha, id FROM aportes where idUsuario = ? AND fecha BETWEEN ? AND ? ", id, startDate, endDate)
 	} else if startDate != "" {
-		rows, err = u.DB.Query("SELECT * FROM aportes where idUsuario = ? AND fecha >= ?", id, startDate)
+		rows, err = u.DB.Query("SELECT valor, idUsuario, fecha, id FROM aportes where idUsuario = ? AND fecha >= ?", id, startDate)
 	} else if endDate != "" {
-		rows, err = u.DB.Query("SELECT * FROM aportes where idUsuario = ? AND fecha <= ?", id, endDate)
+		rows, err = u.DB.Query("SELECT valor, idUsuario, fecha, id FROM aportes where idUsuario = ? AND fecha <= ?", id, endDate)
 	} else {
-		rows, err = u.DB.Query("SELECT * FROM aportes where idUsuario = ?", id)
+		rows, err = u.DB.Query("SELECT valor, idUsuario, fecha, id FROM aportes where idUsuario = ?", id)
 	}
 
 	if err != nil {
@@ -80,7 +81,7 @@ func (u *UserService) GetAllAportesByID(id int, startDate string, endDate string
 
 	for rows.Next() {
 		aporte := &Aporte{}
-		err = rows.Scan(&aporte.Valor, &aporte.IDUsuario, &aporte.Fecha)
+		err = rows.Scan(&aporte.Valor, &aporte.IDUsuario, &aporte.Fecha, &aporte.ID)
 		if err != nil {
 			return aportes, err
 		}

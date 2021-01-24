@@ -75,6 +75,9 @@ func main() {
 	getAllR3ID.HandleFunc("/usuarios/{id:[0-9]+}/aportes/sum", uha.GetSumAportesByID)
 	getAllR3ID.HandleFunc("/usuarios/{id:[0-9]+}/creditos", uha.GetAllCreditosByUserID)
 
+	getAllR3 := sm.Methods(http.MethodGet).Subrouter()
+	getAllR3.HandleFunc("/reporte", uha.GetReporteGeneral)
+
 	getAllR1 := sm.Methods(http.MethodGet).Subrouter()
 	getAllR1.Use(auth.MiddlewareTokenValidationRol1)
 	getAllR1.HandleFunc("/aportes", uha.GetAllAportes)
@@ -84,6 +87,13 @@ func main() {
 	postCreditosR1.Use(uha.MiddlewareValidateCredito)
 	postCreditosR1.Use(auth.MiddlewareTokenValidationRol1)
 	postCreditosR1.HandleFunc("/creditos", uha.CreateCredito)
+
+	postDescuentosR1 := sm.Methods(http.MethodPost).Subrouter()
+	postDescuentosR1.Use(uha.MiddlewareValidateDescuento)
+	postDescuentosR1.Use(auth.MiddlewareTokenValidationRol1)
+	postDescuentosR1.HandleFunc("/descuentos/capital", uha.CreateDescuentoACapital)
+	postDescuentosR1.HandleFunc("/descuentos/interes", uha.PostDescontarAInteres)
+	postDescuentosR1.HandleFunc("/descuentos", uha.PostDescontar)
 
 	postCreditosPagosR1 := sm.Methods(http.MethodPost).Subrouter()
 	postCreditosPagosR1.Use(uha.MiddlewareValidatePago)

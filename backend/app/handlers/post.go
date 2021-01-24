@@ -46,3 +46,42 @@ func (h *UsersHandler) CreateCredito(w http.ResponseWriter, r *http.Request) {
 		data.ToJSON(&GenericError{Message: err.Error()}, w)
 	}
 }
+
+//CreateDescuentoACapital handles the request to discount money from aportes given an user
+func (h *UsersHandler) CreateDescuentoACapital(w http.ResponseWriter, r *http.Request) {
+	var d = (context.Get(r, "d")).(*data.PostDescuento)
+
+	h.l.Info("[CreateDescuento] Creating new descuento to user")
+	res, err := h.UserService.PostDescontarParaCreditoCapital(d)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		data.ToJSON(&GenericError{Message: err.Error()}, w)
+	}
+	data.ToJSON(&res, w)
+}
+
+//PostDescontarAInteres handles the request to discount money from aportes given an user
+func (h *UsersHandler) PostDescontarAInteres(w http.ResponseWriter, r *http.Request) {
+	var d = (context.Get(r, "d")).(*data.PostDescuento)
+
+	h.l.Info("[CreateDescuento] Creating new descuento to user")
+	res, err := h.UserService.PostDescontarParaCreditoIntereses(d)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		data.ToJSON(&GenericError{Message: err.Error()}, w)
+	}
+	data.ToJSON(&res, w)
+}
+
+//PostDescontar handles the request to discount money from aportes given an user
+func (h *UsersHandler) PostDescontar(w http.ResponseWriter, r *http.Request) {
+	var d = (context.Get(r, "d")).(*data.PostDescuento)
+
+	h.l.Info("[PostDescontar] Creating new descuento to user")
+	res, err := h.UserService.PostDescontar(d)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		data.ToJSON(&GenericError{Message: err.Error()}, w)
+	}
+	data.ToJSON(&res, w)
+}

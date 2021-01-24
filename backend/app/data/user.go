@@ -16,7 +16,7 @@ var ErrCreditNotFound = fmt.Errorf("Credit not found")
 // User describes a user
 type User struct {
 	ID    int
-	Rol   string
+	Rol   int
 	Email string
 }
 

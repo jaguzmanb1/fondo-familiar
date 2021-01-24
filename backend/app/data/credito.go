@@ -9,9 +9,9 @@ import (
 type Credito struct {
 	FechaInicio         time.Time `json:"fechaInicio" validate:"required" schema:"date"`
 	TotalCapital        int       `json:"totalCapital" validate:"required"`
-	Descripcion         string    `json:"descripcion" validate:"required"`
+	Descripcion         string    `json:"descripcion"`
 	Tiempo              int       `json:"tiempo" validate:"required"`
-	PorcentajeIntereses float64   `json:"porcentajeIntereses" validate:"required"`
+	PorcentajeIntereses float64   `json:"porcentajeIntereses"`
 	IDUsuario           int       `json:"idUsuario" validate:"required"`
 
 	ValorCuota        int     `json:"valorCuota"`
@@ -22,6 +22,16 @@ type Credito struct {
 	InteresPagado     int     `json:"interesPagado"`
 	TotalPagado       int     `json:"totalPagado"`
 	PorcentajePagado  float64 `json:"porcentajePagado"`
+	DebeTotal         int     `json:"debeTotal"`
+	DebeCapital       int     `json:"debeCapital"`
+	DebeInteres       int     `json:"debeInteres"`
+}
+
+// CreditoExistente resumee of credit
+type CreditoExistente struct {
+	ValorCuota int
+	ID         int
+	IDUsuario  int
 }
 
 // Cuota describes the data from a single cuota
@@ -35,8 +45,8 @@ type Cuota struct {
 
 // Pago describes the payment of aporte or intereses
 type Pago struct {
-	ValorCapital    int       `json:"valorCapital" validate:"required"`
-	ValorIntrereses int       `json:"valorIntereses" validate:"required"`
+	ValorCapital    int       `json:"valorCapital"`
+	ValorIntrereses int       `json:"valorIntereses"`
 	Fecha           time.Time `json:"fecha" validate:"required"`
 	IDCredito       int       `json:"idCredito" validate:"required"`
 }
@@ -61,9 +71,22 @@ func (u *UserService) CreateCredito(id int, cr *Credito) error {
 		return err
 	}
 
-	valorCuota := roundup(int(float64(cr.TotalCapital) * cr.PorcentajeIntereses / (1 - math.Pow(cr.PorcentajeIntereses+1, float64(cr.Tiempo*-1)))))
-	valorIntereses := (cr.Tiempo * int(valorCuota)) - cr.TotalCapital
-	valorTotal := valorIntereses + cr.TotalCapital
+	var (
+		valorCuota     float64
+		valorIntereses float64
+	)
+
+	if cr.PorcentajeIntereses == 0 {
+		valorCuota = roundup(cr.TotalCapital / cr.Tiempo)
+		valorIntereses = 0
+
+	} else {
+		valorCuota = roundup(int(float64(cr.TotalCapital) * cr.PorcentajeIntereses / (1 - math.Pow(cr.PorcentajeIntereses+1, float64(cr.Tiempo*-1)))))
+		valorIntereses = float64((cr.Tiempo * int(valorCuota)) - cr.TotalCapital)
+
+	}
+
+	valorTotal := valorIntereses + float64(cr.TotalCapital)
 	_, err = u.DB.Exec("INSERT INTO creditos (fechaInicio, descripcion, valorCuota, tiempo, idUsuario, totalIntereses, porcentajeInteres, totalCapital, valorTotalCredito, activo, visible) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		cr.FechaInicio, cr.Descripcion, valorCuota, cr.Tiempo, cr.IDUsuario, valorIntereses, cr.PorcentajeIntereses, cr.TotalCapital, valorTotal, true, true)
 	if err == nil {
@@ -127,27 +150,30 @@ func (u *UserService) darTotalPrestado(cr *Credito) Informe {
 	return Informe{}
 }
 
-// GetAllAportes gives all the aportes in the Fondo
+// GetAllCreditos gives all the aportes in the Fondo
 func (u *UserService) GetAllCreditos() (Creditos, error) {
 	u.l.Info("[GetAllCreditos] Getting all creditos from database")
 
 	creditos := Creditos{}
 	rows, err := u.DB.Query(`SELECT fechaInicio, descripcion, valorCuota, tiempo, id, idUsuario, totalIntereses, porcentajeInteres, totalCapital, valorTotalCredito,
-							SUM(pagos.valor) as capitalPagado,
-							SUM(interes.valor) as interesPagado,
-							interes.valor + pagos.valor as totalPagado,
-							((interes.valor + pagos.valor) * 100) / valorTotalCredito as porcentajePagado
-							FROM creditos 
-							JOIN (SELECT idCredito, sum(valor) as valor FROM creditos_intereses GROUP BY idCredito) as interes ON creditos.id = interes.idCredito
-							JOIN (SELECT idCredito, sum(valor) as valor FROM creditos_cuotas GROUP BY idCredito) as pagos ON creditos.id = pagos.idCredito
-							GROUP BY creditos.id`)
+				COALESCE(SUM(pagos.valor), 0) as capitalPagado,
+				COALESCE(SUM(interes.valor), 0) as interesPagado,
+				COALESCE(interes.valor + pagos.valor, 0) as totalPagado,
+				COALESCE((interes.valor + pagos.valor) * 100, 0) / valorTotalCredito as porcentajePagado,
+				COALESCE(valorTotalCredito - (COALESCE(SUM(pagos.valor), 0) + COALESCE(SUM(interes.valor), 0)), 0) as debeTotal,
+				COALESCE(totalCapital - (COALESCE(SUM(pagos.valor), 0)), 0) as debeCapital,
+				COALESCE(totalIntereses - COALESCE(SUM(interes.valor), 0), 0) as debeInteres
+				FROM creditos 
+				LEFT JOIN (SELECT idCredito, sum(valor) as valor FROM creditos_intereses GROUP BY idCredito) as interes ON creditos.id = interes.idCredito
+				LEFT JOIN (SELECT idCredito, sum(valor) as valor FROM creditos_cuotas GROUP BY idCredito) as pagos ON creditos.id = pagos.idCredito
+				GROUP BY creditos.id`)
 	if err != nil {
 		return creditos, err
 	}
 
 	for rows.Next() {
 		credito := &Credito{}
-		err = rows.Scan(&credito.FechaInicio, &credito.Descripcion, &credito.ValorCuota, &credito.Tiempo, &credito.ID, &credito.IDUsuario, &credito.TotalIntereses, &credito.PorcentajeIntereses, &credito.TotalCapital, &credito.ValorTotalCredito, &credito.CapitalPagado, &credito.InteresPagado, &credito.TotalPagado, &credito.PorcentajePagado)
+		err = rows.Scan(&credito.FechaInicio, &credito.Descripcion, &credito.ValorCuota, &credito.Tiempo, &credito.ID, &credito.IDUsuario, &credito.TotalIntereses, &credito.PorcentajeIntereses, &credito.TotalCapital, &credito.ValorTotalCredito, &credito.CapitalPagado, &credito.InteresPagado, &credito.TotalPagado, &credito.PorcentajePagado, &credito.DebeTotal, &credito.DebeCapital, &credito.DebeInteres)
 		if err != nil {
 			return creditos, err
 		}
@@ -158,28 +184,31 @@ func (u *UserService) GetAllCreditos() (Creditos, error) {
 	return creditos, nil
 }
 
-// GetAllCreditosByID gives all the aportes in the Fondo given an user id
+// GetAllCreditosByUserID gives all the creditos in the Fondo given an user id
 func (u *UserService) GetAllCreditosByUserID(id int) (Creditos, error) {
 	u.l.Info("[GetAllCreditos] Getting all creditos from database from user", "user", id)
 
 	creditos := Creditos{}
 	rows, err := u.DB.Query(`SELECT fechaInicio, descripcion, valorCuota, tiempo, id, idUsuario, totalIntereses, porcentajeInteres, totalCapital, valorTotalCredito,
-							SUM(pagos.valor) as capitalPagado,
-							SUM(interes.valor) as interesPagado,
-							interes.valor + pagos.valor as totalPagado,
-							((interes.valor + pagos.valor) * 100) / valorTotalCredito as porcentajePagado
-							FROM creditos 
-							JOIN (SELECT idCredito, sum(valor) as valor FROM creditos_intereses GROUP BY idCredito) as interes ON creditos.id = interes.idCredito
-							JOIN (SELECT idCredito, sum(valor) as valor FROM creditos_cuotas GROUP BY idCredito) as pagos ON creditos.id = pagos.idCredito
-							WHERE idUsuario = ?
-							GROUP BY creditos.id`, id)
+				COALESCE(SUM(pagos.valor), 0) as capitalPagado,
+				COALESCE(SUM(interes.valor), 0) as interesPagado,
+				COALESCE(interes.valor + pagos.valor, 0) as totalPagado,
+				COALESCE((interes.valor + pagos.valor) * 100, 0) / valorTotalCredito as porcentajePagado,
+				COALESCE(valorTotalCredito - (COALESCE(SUM(pagos.valor), 0) + COALESCE(SUM(interes.valor), 0)), 0) as debeTotal,
+				COALESCE(totalCapital - (COALESCE(SUM(pagos.valor), 0)), 0) as debeCapital,
+				COALESCE(totalIntereses - COALESCE(SUM(interes.valor), 0), 0) as debeInteres
+				FROM creditos 
+				LEFT JOIN (SELECT idCredito, sum(valor) as valor FROM creditos_intereses GROUP BY idCredito) as interes ON creditos.id = interes.idCredito
+				LEFT JOIN (SELECT idCredito, sum(valor) as valor FROM creditos_cuotas GROUP BY idCredito) as pagos ON creditos.id = pagos.idCredito
+				WHERE idUsuario = ?
+				GROUP BY creditos.id`, id)
 	if err != nil {
 		return creditos, err
 	}
 
 	for rows.Next() {
 		credito := &Credito{}
-		err = rows.Scan(&credito.FechaInicio, &credito.Descripcion, &credito.ValorCuota, &credito.Tiempo, &credito.ID, &credito.IDUsuario, &credito.TotalIntereses, &credito.PorcentajeIntereses, &credito.TotalCapital, &credito.ValorTotalCredito, &credito.CapitalPagado, &credito.InteresPagado, &credito.TotalPagado, &credito.PorcentajePagado)
+		err = rows.Scan(&credito.FechaInicio, &credito.Descripcion, &credito.ValorCuota, &credito.Tiempo, &credito.ID, &credito.IDUsuario, &credito.TotalIntereses, &credito.PorcentajeIntereses, &credito.TotalCapital, &credito.ValorTotalCredito, &credito.CapitalPagado, &credito.InteresPagado, &credito.TotalPagado, &credito.PorcentajePagado, &credito.DebeTotal, &credito.DebeCapital, &credito.DebeInteres)
 		if err != nil {
 			return creditos, err
 		}
@@ -188,6 +217,27 @@ func (u *UserService) GetAllCreditosByUserID(id int) (Creditos, error) {
 	}
 
 	return creditos, nil
+}
+
+// GetCreditoByID returns a credit given an id
+func (u *UserService) GetCreditoByID(id int) (Credito, error) {
+	u.l.Info("[GetCreditoByID] Getting credit", "id", id)
+
+	credito := Credito{}
+	rows, err := u.DB.Query(`SELECT valorCuota, id, idUsuario FROM fondofamiliar_dev.creditos WHERE id = ?`, id)
+	if err != nil {
+		return Credito{}, err
+	}
+
+	for rows.Next() {
+		credito := &Credito{}
+		err = rows.Scan(&credito.FechaInicio, &credito.Descripcion, &credito.ValorCuota, &credito.Tiempo, &credito.ID, &credito.IDUsuario, &credito.TotalIntereses, &credito.PorcentajeIntereses, &credito.TotalCapital, &credito.ValorTotalCredito, &credito.CapitalPagado, &credito.InteresPagado, &credito.TotalPagado, &credito.PorcentajePagado)
+		if err != nil {
+			return Credito{}, err
+		}
+	}
+
+	return credito, nil
 }
 
 func calcularCuotas(pValorTotal float64, pTiempo int, pPorcentajeInteres float64, pValorCuota float64, pNumeroCuota int, pCuotas Cuotas, pFechaInicio time.Time) Cuotas {
@@ -210,7 +260,6 @@ func calcularCuotas(pValorTotal float64, pTiempo int, pPorcentajeInteres float64
 func roundup(i int) float64 {
 	if i%100 == 0 {
 		return float64(i)
-	} else {
-		return float64(i + 100 - i%100)
 	}
+	return float64(i + 100 - i%100)
 }

@@ -7,6 +7,36 @@ import (
 	"github.com/gorilla/context"
 )
 
+//MiddlewareValidateDescuento  verificacion para los request
+func (h *UsersHandler) MiddlewareValidateDescuento(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		descuento := &data.PostDescuento{}
+
+		err := data.FromJSON(descuento, r.Body)
+		if err != nil {
+			h.l.Error("deserializing descuento", "error", err)
+
+			rw.WriteHeader(http.StatusBadRequest)
+			data.ToJSON(&GenericError{Message: err.Error()}, rw)
+			return
+		}
+		h.l.Debug("Serialized aporte", "descuento", descuento)
+		errs := h.v.Validate(descuento)
+		if len(errs) != 0 {
+			h.l.Error("validating descuento", "errors:", errs)
+			rw.WriteHeader(http.StatusUnprocessableEntity)
+			data.ToJSON(&ValidationError{Messages: errs.Errors()}, rw)
+			return
+		}
+
+		// add the product to the context
+		context.Set(r, "d", descuento)
+
+		// Call the next handler, which can be another middleware in the chain, or the final handler.
+		next.ServeHTTP(rw, r)
+	})
+}
+
 //MiddlewareValidateAporte  verificacion para los request
 func (h *UsersHandler) MiddlewareValidateAporte(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
@@ -102,10 +132,12 @@ func (h *UsersHandler) MiddlewareCheckUserIDCall(next http.Handler) http.Handler
 		var us = (context.Get(r, "us")).(data.User)
 		id := getID(r)
 
-		if us.ID != 1 {
-			if us.ID != id {
+		if us.Rol != 1 {
+			if us.Rol != id {
 				h.l.Error("User trying to access data from another user", "User Origin", us, "id", id)
 				rw.WriteHeader(http.StatusUnauthorized)
+				data.ToJSON(&ValidationError{Messages: []string{"User trying to access data from another user"}}, rw)
+
 				return
 			}
 		}

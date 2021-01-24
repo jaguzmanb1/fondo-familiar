@@ -25,7 +25,7 @@ func (h *UsersHandler) GetAllAportes(w http.ResponseWriter, r *http.Request) {
 func (h *UsersHandler) GetAllCreditos(w http.ResponseWriter, r *http.Request) {
 	var us = (context.Get(r, "us")).(data.User)
 
-	h.l.Info("[GetAllCreditos] Recieving call to get all aportes from", "user", us)
+	h.l.Info("[GetAllCreditos] Recieving call to get all creditos from", "user", us)
 	creditos, err := h.UserService.GetAllCreditos()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -33,6 +33,20 @@ func (h *UsersHandler) GetAllCreditos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data.ToJSON(&creditos, w)
+}
+
+// GetReporteGeneral returns all aportes in the fondo
+func (h *UsersHandler) GetReporteGeneral(w http.ResponseWriter, r *http.Request) {
+	var us = (context.Get(r, "us")).(data.User)
+
+	h.l.Info("[GetReporteGeneral] Recieving call to get a general report from ", "user", us)
+	reporte, err := h.UserService.GetReporteGeneral()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		data.ToJSON(&GenericError{Message: err.Error()}, w)
+	}
+
+	data.ToJSON(&reporte, w)
 }
 
 // GetAllCreditosByUserID returns all creditos in the fondo given a user ID

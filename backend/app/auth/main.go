@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"fondo-mod/data"
 	"os"
+	"strconv"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/hashicorp/go-hclog"
@@ -54,7 +55,11 @@ func (h *Auth) validateToken(t string, l string) (bool, data.User, error) {
 
 		s := fmt.Sprintf("%.0f", rol)
 		if s <= l {
-			return true, data.User{ID: int(id), Rol: s, Email: email}, nil
+			rol, err := strconv.Atoi(s)
+			if err != nil {
+				return false, data.User{}, err
+			}
+			return true, data.User{ID: int(id), Rol: rol, Email: email}, nil
 		}
 
 	}

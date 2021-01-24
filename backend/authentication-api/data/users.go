@@ -19,8 +19,9 @@ type User struct {
 // UserSignin defines user when is on Signin phase
 type UserSignin struct {
 	ID         int    `json:"id"`
-	Nombre     string `json:"nombre" validate:"required"`
-	Email      string `json:"email" validate:"required"`
+	Nombre     string `json:"nombre"`
+	Usuario    string `json:"usuario" validate:"required"`
+	Email      string `json:"email"`
 	Contrasena string `json:"contrasena" validate:"required"`
 	IDRol      int    `json:"idRol"`
 }
@@ -29,9 +30,10 @@ type UserSignin struct {
 type UserCreate struct {
 	ID         int    `json:"id"`
 	Nombre     string `json:"nombre" validate:"required"`
-	Celular    string `json:"celular" validate:"required"`
+	Celular    string `json:"celular"`
 	Contrasena string `json:"contrasena" validate:"required"`
-	Email      string `json:"email" validate:"required"`
+	Email      string `json:"email"`
+	Usuario    string `json:"usuario" validate:"required"`
 }
 
 //Users is una colección de User
@@ -113,6 +115,29 @@ func (s *UserService) GetUserByEmail(email string) (UserSignin, error) {
 	return user, ErrProductNotFound
 }
 
+//GetUserByUser returns an user given an user
+func (s *UserService) GetUserByUser(usuario string) (UserSignin, error) {
+	s.l.Info("[GetUserByEmail] Getting user from database with", "user", usuario)
+
+	user := UserSignin{}
+	rows, err := s.DB.Query("SELECT id, nombre, contrasena, idRol, email, usuario FROM usuario WHERE usuario = (?)", usuario)
+	if err != nil {
+		return user, ErrProductNotFound
+	}
+
+	for rows.Next() {
+		user = UserSignin{}
+		err = rows.Scan(&user.ID, &user.Nombre, &user.Contrasena, &user.IDRol, &user.Email, &user.Usuario)
+		if err != nil {
+			return user, err
+		}
+
+		return user, err
+	}
+
+	return user, ErrProductNotFound
+}
+
 //CreateUser crea un usuario
 func (s *UserService) CreateUser(pUser *UserCreate) error {
 	s.l.Info("[CreateUser] Creating", "user", pUser)
@@ -120,12 +145,13 @@ func (s *UserService) CreateUser(pUser *UserCreate) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.DB.Exec("INSERT INTO usuario (nombre, celular, contrasena, email, idrol) VALUES (?, ?, ?, ?, ?)",
+	_, err = s.DB.Exec("INSERT INTO usuario (nombre, celular, contrasena, email, idrol, usuario) VALUES (?, ?, ?, ?, ?, ?)",
 		pUser.Nombre,
 		pUser.Celular,
 		saltedPassword,
 		pUser.Email,
-		3)
+		3,
+		pUser.Usuario)
 
 	return err
 }
